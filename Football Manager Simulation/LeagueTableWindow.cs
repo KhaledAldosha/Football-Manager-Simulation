@@ -4,45 +4,47 @@ using System.Linq;
 
 namespace GUI
 {
+    // The LeagueTableWindow displays the current league standings.
+    // It sorts clubs by points and goal difference and shows their basic stats.
     public class LeagueTableWindow : Window
     {
-        private League _league;
-        private int _managerClubIndex;
+        private League _league;        // Reference to the league data
+        private int _managerClubIndex;   // Index of the user's club in the league
 
+        // Constructor that initializes the league table window with a league and manager club index.
         public LeagueTableWindow(League league, int managerClubIndex, string title, Rectangle rectangle, bool visible)
             : base(title, rectangle, visible)
         {
             _league = league;
             _managerClubIndex = managerClubIndex;
         }
-
+        // Draws the league table: first draws the window border, then the table header,
+        // and finally each club's stats, highlighting the manager's club.
         public override void Draw(bool active)
         {
             base.Draw(active);
-            if (!Visible)
+            if (!_visible)
                 return;
 
-            // Sort clubs by Points (desc), then Goal Difference (desc), then Goals For (desc).
+            // Sort clubs by points, then goal difference, then goals for.
             var sortedClubs = _league.Clubs
                 .OrderByDescending(c => c.Points)
                 .ThenByDescending(c => c.GoalsFor - c.GoalsAgainst)
                 .ThenByDescending(c => c.GoalsFor)
                 .ToList();
 
-            // Print header
+            // Set header position and color
             Console.SetCursorPosition(_rectangle.X + 2, _rectangle.Y + 2);
             Console.ForegroundColor = ConsoleColor.Yellow;
-            // Using string interpolation with alignment specifiers for neat columns.
-            // -22 means left-justify within 22 chars; 3 or 4 means right-justify within 3 or 4 chars, etc.
+            // Header format: Name, W, D, L, GF, GA, Pts
             Console.WriteLine($"{"Name",-22}{"W",3}{"D",3}{"L",3}{"GF",4}{"GA",4}{"Pts",4}");
             Console.ResetColor();
 
-            // Print each club row
+            // List each club with its stats
             for (int i = 0; i < sortedClubs.Count; i++)
             {
                 Console.SetCursorPosition(_rectangle.X + 2, _rectangle.Y + 3 + i);
-
-                // Highlight the manager’s club
+                // If this is the manager's club, highlight it
                 if (sortedClubs[i] == _league.Clubs[_managerClubIndex])
                     Console.ForegroundColor = ConsoleColor.Yellow;
                 else

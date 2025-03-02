@@ -5,15 +5,18 @@ using System.Numerics;
 
 namespace GUI
 {
+    // The TeamFactory class is responsible for preparing a club's team for a match.
+    // It ensures that a formation is set and players are assigned to positions based on the formation.
     public static class TeamFactory
     {
-        // Prepares the team for match simulation by ensuring a formation is set
-        // and players are assigned to formation positions.
+        // Prepares the team for match simulation. Ensures that a formation is assigned.
+        // If no formation is selected, assigns a default formation (4-3-3).
+        // Also automatically assigns players to positions using auto-assignment logic.
         public static void PrepareTeam(Club club)
         {
             if (club.SelectedFormation == null)
             {
-                // Assign a default 4-3-3 formation.
+                // Assign default formation: 4-3-3
                 club.SelectedFormation = new Formation("4-3-3", new List<FormationPosition>
                 {
                     new FormationPosition("GK", 50, 20),
@@ -31,11 +34,13 @@ namespace GUI
             }
             if (club.PositionAssignments == null || club.PositionAssignments.Count < club.SelectedFormation.Positions.Count)
             {
+                // Automatically assign players if not all positions are filled.
                 club.PositionAssignments = AutoAssignPlayers(club);
             }
         }
-
-        // Auto-assigns players to each formation position based on matching positions and rating.
+        // Auto-assigns players to each position in the formation.
+        // For each position, picks the highest-rated player from those available for that position.
+        // If no player matches, picks any unassigned player.
         private static Dictionary<int, Player> AutoAssignPlayers(Club club)
         {
             var assignments = new Dictionary<int, Player>();
@@ -49,10 +54,10 @@ namespace GUI
                     .ToList();
                 if (available.Count == 0)
                 {
-                    // If no player matches the position, choose any unassigned player.
+                    // If no matching player, select any unassigned player.
                     available = club.Players.Where(p => !assignments.Values.Contains(p)).ToList();
                 }
-                // Pick the highest rated player.
+                // Pick the highest-rated available player.
                 var sorted = available.OrderByDescending(p => p.Rating).ToList();
                 if (sorted.Count > 0)
                 {
@@ -61,8 +66,9 @@ namespace GUI
             }
             return assignments;
         }
-
-        // Returns the starting eleven and bench from a club’s squad.
+        // Returns the starting eleven and bench players from a club's squad.
+        // The starting eleven are those assigned to formation positions.
+        // The bench includes all players not in the starting eleven.
         public static (List<Player> starting, List<Player> bench) GetTeamFromClub(Club club)
         {
             PrepareTeam(club);

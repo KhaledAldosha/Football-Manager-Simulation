@@ -5,40 +5,56 @@ using System.Numerics;
 
 namespace GUI
 {
+    // A window that displays a list of players and allows toggling
+    // their transfer status or setting their price.
     public class PlayersWindow : MenuWindow
     {
-        private List<Player> _players;
+        private List<Player> _players; // Reference to the list of players displayed
 
-        public PlayersWindow(List<Player> players, string title, Rectangle rectangle, bool visible, List<MenuOptionAction> items)
+        // Constructor for the players window.
+        // Inherits from MenuWindow so we can navigate through player entries as menu items.
+        public PlayersWindow(
+            List<Player> players,
+            string title,
+            Rectangle rectangle,
+            bool visible,
+            List<MenuOptionAction> items)
             : base(title, rectangle, visible, items)
         {
             _players = players;
-            RefreshPlayerList();
+            RefreshPlayerList(); // Build the initial list of menu items from the players
         }
-
+        // Rebuilds the _items list based on the current _players collection.
         private void RefreshPlayerList()
         {
             _items.Clear();
+            // If there are no players, show a single "No players" item
             if (_players.Count == 0)
             {
                 _items.Add(new MenuOptionAction("No players available", InterfaceAction.Nothing));
             }
             else
             {
+                // For each player, add a menu option showing their info
                 foreach (var p in _players)
                     _items.Add(new MenuOptionAction(p.Info(), InterfaceAction.TogglePlayerTransferStatus));
             }
+
+            // Ensure _activeItem is within bounds
             if (_activeItem >= _items.Count)
                 _activeItem = 0;
         }
-
+        // Update method handles toggling transfer status (via T key),
+        // then calls base.Update() for up/down navigation.
         public override void Update()
         {
-            // When the user presses T, prompt for transfer price and mark the player for transfer.
-            if (UserInterface.Input.Key == ConsoleKey.T && _players.Count > 0 && _activeItem < _players.Count)
+            // If user presses 'T', prompt for a new transfer price for the selected player
+            if (UserInterface.Input.Key == ConsoleKey.T &&
+                _players.Count > 0 &&
+                _activeItem < _players.Count)
             {
                 Player selected = _players[_activeItem];
-                // Only prompt if the player is not already transfer-listed.
+                // Only prompt if player isn't already on the transfer list
                 if (!selected.AvailableForTransfer)
                 {
                     Console.Clear();
@@ -57,9 +73,13 @@ namespace GUI
                 }
             }
 
+            // Call the base update to handle menu navigation (up/down) and action setting
             base.Update();
+
+            // Refresh the list in case something changed (like toggling status)
             RefreshPlayerList();
 
+            // If we have a valid selected item, set the global CurrentPlayer
             if (_players.Count > 0 && _activeItem < _players.Count)
                 UserInterface.CurrentPlayer = _players[_activeItem];
             else

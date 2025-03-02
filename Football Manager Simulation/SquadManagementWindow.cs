@@ -6,45 +6,53 @@ using System.Numerics;
 
 namespace GUI
 {
+    // A window that allows the user to select a formation,
+    // assign players to each position, and choose a tactic.
     public class SquadManagementWindow : Window
     {
-        private Club _userTeam;
-        private List<Formation> _formations;
-        private int _activeFormationIndex;
-        private Formation _selectedFormation;
-        private Dictionary<int, Player> _positionAssignments;
-        private int _activePositionIndex;
-        private Player selectedPlayer;
+        private Club _userTeam;                   // Reference to the user's club
+        private List<Formation> _formations;      // A list of possible formations
+        private int _activeFormationIndex;        // Which formation is currently selected
+        private Formation _selectedFormation;     // The formation the user has chosen
+        private Dictionary<int, Player> _positionAssignments; // Mapping from position index => Player
+        private int _activePositionIndex;         // Which position is selected in the UI
+        private Player selectedPlayer;            // The currently highlighted player in that position
 
-        // Tactic selection fields.
+        // Tactic selection
         private List<string> _tactics = new List<string> { "Gegenpress", "Tikitaka", "Park the Bus" };
         private int _selectedTacticIndex = 0;
         private bool _inTacticSelection = false;
 
-        // Mode flags.
+        // Mode flags: we can be in formation selection or starting-11 selection
         private bool _inFormationSelection = true;
         private bool _inStarting11Selection = false;
 
+        // Constructor for the SquadManagementWindow.
+        // Sets up references to the user's team, default tactic, and loads possible formations.
         public SquadManagementWindow(Club userTeam, string title, Rectangle rectangle, bool visible)
             : base(title, rectangle, visible)
         {
             _userTeam = userTeam;
+            // If userTeam doesn't have a tactic, pick the first from _tactics
             if (string.IsNullOrEmpty(_userTeam.SelectedTactic))
                 _userTeam.SelectedTactic = _tactics[_selectedTacticIndex];
 
             InitializeFormations();
             _activeFormationIndex = 0;
             _selectedFormation = _formations[_activeFormationIndex];
+
+            // If the user team has a dictionary of positions => players, use it; otherwise empty
             _positionAssignments = _userTeam.PositionAssignments ?? new Dictionary<int, Player>();
+
             _activePositionIndex = 0;
             selectedPlayer = null;
         }
-
+        // Build a list of possible formations to choose from.
         private void InitializeFormations()
         {
             _formations = new List<Formation>
             {
-                // "4-3-3": GK, LB, RB, CB, CB, CM, CAM, CM, RW, ST, LW.
+                // 4-3-3
                 new Formation("4-3-3", new List<FormationPosition>
                 {
                     new FormationPosition("GK", 50, 20),
@@ -53,13 +61,13 @@ namespace GUI
                     new FormationPosition("CB", 30, 40),
                     new FormationPosition("CB", 70, 40),
                     new FormationPosition("CM", 30, 60),
-                    new FormationPosition("CAM", 50, 60),
+                    new FormationPosition("CAM",50, 60),
                     new FormationPosition("CM", 70, 60),
                     new FormationPosition("RW", 90, 60),
                     new FormationPosition("ST", 50, 80),
                     new FormationPosition("LW", 10, 60)
                 }),
-                // "4-4-2": GK, LB, CB, CB, RB, LM, CM, CM, RM, ST, ST.
+                // 4-4-2
                 new Formation("4-4-2", new List<FormationPosition>
                 {
                     new FormationPosition("GK", 50, 20),
@@ -74,7 +82,7 @@ namespace GUI
                     new FormationPosition("ST", 40, 80),
                     new FormationPosition("ST", 60, 80)
                 }),
-                // "4-3-2-1": GK, LB, CB, CB, RB, CM, CM, CM, CAM, CAM, ST.
+                // 4-3-2-1
                 new Formation("4-3-2-1", new List<FormationPosition>
                 {
                     new FormationPosition("GK", 50, 20),
@@ -85,13 +93,14 @@ namespace GUI
                     new FormationPosition("CM", 30, 60),
                     new FormationPosition("CM", 50, 60),
                     new FormationPosition("CM", 70, 60),
-                    new FormationPosition("CAM", 30, 80),
-                    new FormationPosition("CAM", 70, 80),
+                    new FormationPosition("CAM",30, 80),
+                    new FormationPosition("CAM",70, 80),
                     new FormationPosition("ST", 50, 90)
                 })
             };
         }
-
+        // Update logic for the window: checks keys for switching tactic,
+        // switching formation, or selecting players for positions.
         public override void Update()
         {
             var key = UserInterface.Input.Key;
@@ -100,6 +109,7 @@ namespace GUI
                 _currentAction = InterfaceAction.ReturnToMainMenu;
                 return;
             }
+            // T toggles tactic selection
             if (key == ConsoleKey.R)
             {
                 _inTacticSelection = !_inTacticSelection;
@@ -118,7 +128,7 @@ namespace GUI
                     UpdateStarting11Selection(key);
             }
         }
-
+        // Handle up/down/enter for selecting a tactic from _tactics list.
         private void UpdateTacticSelection(ConsoleKey key)
         {
             if (key == ConsoleKey.UpArrow)
@@ -127,13 +137,15 @@ namespace GUI
                 _selectedTacticIndex = (_selectedTacticIndex + 1) % _tactics.Count;
             else if (key == ConsoleKey.Enter)
             {
+                // Confirm the new tactic
                 _userTeam.SelectedTactic = _tactics[_selectedTacticIndex];
                 _inTacticSelection = false;
             }
             else if (key == ConsoleKey.LeftArrow)
                 _inTacticSelection = false;
         }
-
+        // Handle up/down for selecting formation, F for cycling formation,
+        // Enter to confirm, or Right arrow to switch to position assignment.
         private void UpdateFormationSelection(ConsoleKey key)
         {
             if (key == ConsoleKey.UpArrow)
@@ -150,35 +162,49 @@ namespace GUI
             {
                 _selectedFormation = _formations[_activeFormationIndex];
                 _userTeam.SelectedFormation = _selectedFormation;
+                // Clear the current position assignments
                 _positionAssignments = new Dictionary<int, Player>();
                 _userTeam.PositionAssignments = _positionAssignments;
                 _activePositionIndex = 0;
             }
             else if (key == ConsoleKey.RightArrow)
             {
+                // Switch to starting 11 selection if we have positions
                 if (_selectedFormation.Positions.Count > 0)
                 {
                     _inFormationSelection = false;
                     _inStarting11Selection = true;
-                    selectedPlayer = _positionAssignments.ContainsKey(_activePositionIndex) ? _positionAssignments[_activePositionIndex] : null;
+                    selectedPlayer = _positionAssignments.ContainsKey(_activePositionIndex)
+                        ? _positionAssignments[_activePositionIndex]
+                        : null;
                 }
             }
         }
-
+        // Handle up/down for cycling positions, Enter to assign a player,
+        // X = auto-assign, Left arrow to go back to formation selection.
         private void UpdateStarting11Selection(ConsoleKey key)
         {
             if (key == ConsoleKey.UpArrow)
             {
-                _activePositionIndex = (_activePositionIndex - 1 + _selectedFormation.Positions.Count) % _selectedFormation.Positions.Count;
-                selectedPlayer = _positionAssignments.ContainsKey(_activePositionIndex) ? _positionAssignments[_activePositionIndex] : null;
+                _activePositionIndex =
+                    (_activePositionIndex - 1 + _selectedFormation.Positions.Count)
+                    % _selectedFormation.Positions.Count;
+                selectedPlayer = _positionAssignments.ContainsKey(_activePositionIndex)
+                    ? _positionAssignments[_activePositionIndex]
+                    : null;
             }
             else if (key == ConsoleKey.DownArrow)
             {
-                _activePositionIndex = (_activePositionIndex + 1) % _selectedFormation.Positions.Count;
-                selectedPlayer = _positionAssignments.ContainsKey(_activePositionIndex) ? _positionAssignments[_activePositionIndex] : null;
+                _activePositionIndex =
+                    (_activePositionIndex + 1)
+                    % _selectedFormation.Positions.Count;
+                selectedPlayer = _positionAssignments.ContainsKey(_activePositionIndex)
+                    ? _positionAssignments[_activePositionIndex]
+                    : null;
             }
             else if (key == ConsoleKey.Enter)
             {
+                // Prompt to select a player for this position
                 string pos = _selectedFormation.Positions[_activePositionIndex].PositionName;
                 Player chosen = SelectPlayerForPosition(pos);
                 if (chosen != null)
@@ -190,6 +216,7 @@ namespace GUI
             }
             else if (key == ConsoleKey.X)
             {
+                // Auto-assign all positions
                 AutoAssignPlayers();
                 _activePositionIndex = 0;
                 selectedPlayer = _positionAssignments.ContainsKey(0) ? _positionAssignments[0] : null;
@@ -200,7 +227,8 @@ namespace GUI
                 _inFormationSelection = true;
             }
         }
-
+        // Draw method: draws the formation info, tactic info,
+        // formation selection, starting 11, and instructions.
         public override void Draw(bool active)
         {
             if (!_visible)
@@ -226,7 +254,8 @@ namespace GUI
 
         private void DrawFormationInfo()
         {
-            int x = _rectangle.X + 2, y = _rectangle.Y + 1;
+            int x = _rectangle.X + 2;
+            int y = _rectangle.Y + 1;
             Console.SetCursorPosition(x, y);
             Console.ForegroundColor = ConsoleColor.White;
             Console.WriteLine($"Formation: {_selectedFormation.Name}");
@@ -235,7 +264,8 @@ namespace GUI
 
         private void DrawTacticInfo()
         {
-            int x = _rectangle.X + _rectangle.Width - 30, y = _rectangle.Y + 1;
+            int x = _rectangle.X + _rectangle.Width - 30;
+            int y = _rectangle.Y + 1;
             Console.SetCursorPosition(x, y);
             Console.ForegroundColor = ConsoleColor.White;
             Console.WriteLine($"Tactic: {_userTeam.SelectedTactic}");
@@ -244,23 +274,24 @@ namespace GUI
 
         private void DrawFormationSelectionSection()
         {
-            int x = _rectangle.X + 2, y = _rectangle.Y + 3;
+            int x = _rectangle.X + 2;
+            int y = _rectangle.Y + 3;
             Console.SetCursorPosition(x, y);
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("Formations:");
             Console.ResetColor();
             y++;
-            foreach (var formation in _formations)
+            for (int i = 0; i < _formations.Count; i++)
             {
                 Console.SetCursorPosition(x, y);
-                if (_inFormationSelection && _formations.IndexOf(formation) == _activeFormationIndex)
+                if (_inFormationSelection && _formations.IndexOf(_formations[i]) == _activeFormationIndex)
                 {
                     Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine($"> {formation.Name}");
+                    Console.WriteLine($"> {_formations[i].Name}");
                 }
                 else
                 {
-                    Console.WriteLine($"  {formation.Name}");
+                    Console.WriteLine($"  {_formations[i].Name}");
                 }
                 Console.ResetColor();
                 y++;
@@ -269,7 +300,8 @@ namespace GUI
 
         private void DrawStarting11Section()
         {
-            int x = _rectangle.X + 2, y = _rectangle.Y + 10;
+            int x = _rectangle.X + 2;
+            int y = _rectangle.Y + 10;
             Console.SetCursorPosition(x, y);
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("Starting 11:");
@@ -279,8 +311,11 @@ namespace GUI
             {
                 Console.SetCursorPosition(x, y + i);
                 string posName = _selectedFormation.Positions[i].PositionName;
-                string playerName = _positionAssignments.ContainsKey(i) ? _positionAssignments[i].Name : "Empty";
+                string playerName = _positionAssignments.ContainsKey(i)
+                    ? _positionAssignments[i].Name
+                    : "Empty";
                 string display = $"{posName}: {playerName}";
+
                 if (_inStarting11Selection && i == _activePositionIndex)
                 {
                     Console.ForegroundColor = ConsoleColor.Green;
@@ -298,12 +333,16 @@ namespace GUI
         {
             if (selectedPlayer == null)
                 return;
-            int x = _rectangle.X + 40, y = _rectangle.Y + 3;
+            int x = _rectangle.X + 40;
+            int y = _rectangle.Y + 3;
+
             Console.SetCursorPosition(x, y);
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("Player Information:");
             Console.ResetColor();
             y++;
+
+            // Print player details
             Console.SetCursorPosition(x, y++);
             Console.WriteLine($"Name: {selectedPlayer.Name}");
             Console.SetCursorPosition(x, y++);
@@ -324,7 +363,9 @@ namespace GUI
 
         private void DrawInstructionsSection()
         {
-            int x = _rectangle.X + 2, y = _rectangle.Y + _rectangle.Height - 4;
+            int x = _rectangle.X + 2;
+            int y = _rectangle.Y + _rectangle.Height - 4;
+
             Console.SetCursorPosition(x, y);
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine("Formation Mode: Up/Down = Cycle, F = Next formation, Enter = Confirm, Right = Players");
@@ -334,7 +375,7 @@ namespace GUI
             Console.WriteLine("Tactic Mode: Press R to toggle tactic selection");
             Console.ResetColor();
         }
-
+        // Auto-assign players to positions by picking best matches for each position name.
         private void AutoAssignPlayers()
         {
             for (int i = 0; i < _selectedFormation.Positions.Count; i++)
@@ -356,7 +397,7 @@ namespace GUI
             }
             _userTeam.PositionAssignments = _positionAssignments;
         }
-
+        // Simple mergesort to pick the highest-rated players first.
         private List<Player> MergeSortPlayers(List<Player> players)
         {
             if (players.Count <= 1)
@@ -401,7 +442,8 @@ namespace GUI
             }
             return result;
         }
-
+        // Prompts the user to select a player for a given position name,
+        // from the userTeam's players who match that position.
         private Player SelectPlayerForPosition(string position)
         {
             List<Player> available = _userTeam.Players
@@ -443,7 +485,7 @@ namespace GUI
                     ShowPlayerDetails(available[selIndex]);
             }
         }
-
+        // Displays a detailed breakdown of a player's stats.
         private void ShowPlayerDetails(Player player)
         {
             Console.Clear();
@@ -462,7 +504,7 @@ namespace GUI
             Console.ReadKey(true);
         }
     }
-
+    // Represents a formation by name and a list of positions with X/Y offsets.
     public class Formation
     {
         public string Name { get; }
@@ -474,12 +516,14 @@ namespace GUI
             Positions = positions;
         }
     }
-
+    // Represents a single position in a formation, with an X/Y offset
+    // relative to the pitch or some reference.
     public class FormationPosition
     {
         public string PositionName { get; }
         public int XOffset { get; }
         public int YOffset { get; }
+
         public FormationPosition(string positionName, int xOffset, int yOffset)
         {
             PositionName = positionName;

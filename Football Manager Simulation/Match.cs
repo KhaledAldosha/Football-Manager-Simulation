@@ -1,111 +1,112 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Drawing;
 
 namespace GUI
 {
-    public enum MainMenuSection { LiveMatch, MatchSettings }
-    public enum MatchSettingsSubMenu { None, GameSpeed, FormationChange, ModifyTactics, PlayerRoles, AttackingToggle }
-
+    // Represents a live match simulation window/class.
+    // Handles team A vs. team B logic, updating positions,
+    // scoring, halftime checks, etc.
     public class Match : Window
     {
-        // ----- Simulation & UI Fields -----
+        // Boundaries of the pitch
         private int pitchLeft, pitchTop, pitchRight, pitchBottom;
-        private int leftGoalBoxXMax, rightGoalBoxXMin;
-        private MainMenuSection currentMainSection;
-        private MatchSettingsSubMenu currentSubMenu;
-        private bool isRunning, isPaused;
-        private bool isFirstHalf = true;
-        private int currentMinute, gameSpeed, teamAScore, teamBScore;
-        private bool ballInTransit;
-        private string injuryMessage;
-        private int injuryMessageTimer;
-        private string lastTeamToTouchBall;
+
+        // Current match minute, and each team's score
+        private int currentMinute, teamAScore, teamBScore;
+
+        // Flags to indicate match state
+        private bool isRunning, isPaused, ballInTransit, isFirstHalf;
+        private bool firstHalfStartingTeamA;
+
+        // References to clubs and their player lists
+        private Club clubA, clubB;
+        private List<Player> teamAPlayers, teamBPlayers;
+
+        // Random generator for chance-based events
         private Random randomGenerator;
-        private List<string> tacticsList;
-        private int currentTacticIndex;
-        private string currentTactic;
 
-        // Added field for clarity.
-        private bool firstHalfStartingTeamA = true;
+        // Game speed factor
+        private int gameSpeed = 100;
 
-        // ----- Team Data -----
-        private List<Player> teamAPlayers, teamBPlayers, benchTeamAPlayers, benchTeamBPlayers;
+        // Track how much match time has passed, and how much time per tick
+        private double simulationTime = 0.0;
+        private double timePerTick = 0.1;
 
-        // Now the match is played between two clubs.
-        private Club userClub;
-        private Club opponentClub;
-
-        // ----- Constructor -----
-        public Match(Club userClub, Club opponentClub)
+        // Constructor requires two clubs to simulate a match.
+        // Also sets up the window area.
+        public Match(Club clubA, Club clubB)
             : base("Live Match", new Rectangle(0, 0, 150, 40), true)
         {
             Console.CursorVisible = false;
-            this.userClub = userClub;
-            this.opponentClub = opponentClub;
+            this.clubA = clubA;
+            this.clubB = clubB;
+
+            // Extract player lists from each club
+            teamAPlayers = clubA.Players;
+            teamBPlayers = clubB.Players;
+
             InitializeSimulation();
         }
-
-        // ----- Initialization -----
+        // Overloaded constructor if only one club is provided.
+        // Creates a dummy opponent.
+        public Match(Club clubA)
+            : this(clubA, new Club("Opponent", 100000000))
+        {
+        }
+        // Initializes all match variables, sets pitch boundaries, random, etc.
+        // Assigns formation positions, and waits for user to start.
         private void InitializeSimulation()
         {
-            currentMainSection = MainMenuSection.LiveMatch;
-            currentSubMenu = MatchSettingsSubMenu.None;
             isRunning = true;
             isPaused = false;
             ballInTransit = false;
             currentMinute = 0;
-            gameSpeed = 100;
             teamAScore = 0;
             teamBScore = 0;
-            tacticsList = new List<string> { "Tiki-Taka", "Gegenpress", "Park The Bus" };
-            currentTacticIndex = 0;
-            currentTactic = tacticsList[currentTacticIndex];
+            isFirstHalf = true;
+            firstHalfStartingTeamA = true;
 
-            // Set pitch boundaries.
+            // Hard-coded pitch boundaries
             pitchLeft = 2;
             pitchTop = 4;
             pitchRight = 100;
             pitchBottom = 30;
-            leftGoalBoxXMax = pitchLeft + 1;
-            rightGoalBoxXMin = pitchRight - 1;
 
             randomGenerator = new Random();
-            InitializeTeams();
 
-            // Use legacy formation assignment (for demo).
+            // Assign formation positions for each team's players
             AssignFormationPositions(teamAPlayers, true);
             AssignFormationPositions(teamBPlayers, false);
 
-            // Start with Team A kickoff.
-            firstHalfStartingTeamA = true;
             WaitForKickoffEvent();
+
+            // Choose a kickoff player from Team A
             Player kickoffPlayer = SelectKickoffPlayer(teamAPlayers);
-            if (kickoffPlayer != null)
-                AssignBallToPlayer(kickoffPlayer);
+            if (kickoffPlayer != null) AssignBallToPlayer(kickoffPlayer);
         }
 
-        private void InitializeTeams()
+        // Waits for user input before starting the match.
+        private void WaitForKickoffEvent()
         {
-            // Retrieve unified squads from TeamFactory.
-            var userTeamData = TeamFactory.GetTeamFromClub(userClub);
-            teamAPlayers = userTeamData.starting;
-            benchTeamAPlayers = userTeamData.bench;
-
-            var opponentTeamData = TeamFactory.GetTeamFromClub(opponentClub);
-            teamBPlayers = opponentTeamData.starting;
-            benchTeamBPlayers = opponentTeamData.bench;
+            Console.Clear();
+            Console.SetCursorPosition(30, 15);
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine("Kickoff! Press any key to start...");
+            Console.ResetColor();
+            Console.ReadKey(true);
         }
 
-        /// <summary>
-        /// Legacy method to assign formation positions using a fixed template.
-        /// </summary>
+        // Assigns formation positions for up to 11 players using a simple template,
+        // with the GK pinned to the net.
         private void AssignFormationPositions(List<Player> team, bool isTeamA)
         {
-            double[,] template = new double[11, 2]
+            // A sample formation for up to 11 players
+            double[,] formationTemplate = new double[11, 2]
             {
-                {0.05, 0.5},   // GK (overridden)
+                {0.05, 0.5},
                 {0.20, 0.2},
                 {0.20, 0.8},
                 {0.40, 0.3},
@@ -118,187 +119,155 @@ namespace GUI
                 {0.90, 0.7}
             };
 
-            int count = team.Count < 11 ? team.Count : 11;
+            int count = Math.Min(team.Count, 11);
             for (int i = 0; i < count; i++)
             {
-                int posX, posY;
+                int x, y;
+                // If the i-th player is GK, place them at the net
                 if (i == 0 && team[i].Position.Contains("GK"))
                 {
                     if (isTeamA)
                     {
-                        posX = pitchLeft + 1;
-                        posY = (pitchTop + pitchBottom) / 2;
+                        x = pitchLeft + 1;
+                        y = (pitchTop + pitchBottom) / 2;
                     }
                     else
                     {
-                        posX = pitchRight - 1;
-                        posY = (pitchTop + pitchBottom) / 2;
+                        x = pitchRight - 1;
+                        y = (pitchTop + pitchBottom) / 2;
                     }
                 }
                 else
                 {
-                    double relX = template[i, 0];
-                    double relY = template[i, 1];
-                    double newRelX = isTeamA ? relX * 0.5 : 0.5 + (relX * 0.5);
-                    posX = pitchLeft + (int)(newRelX * (pitchRight - pitchLeft));
-                    posY = pitchTop + (int)(relY * (pitchBottom - pitchTop));
+                    // Use the formation template for outfield
+                    double rx = formationTemplate[i, 0];
+                    double ry = formationTemplate[i, 1];
+                    double newRx = isTeamA ? rx * 0.5 : 0.5 + rx * 0.5;
+                    x = pitchLeft + (int)(newRx * (pitchRight - pitchLeft));
+                    y = pitchTop + (int)(ry * (pitchBottom - pitchTop));
                 }
-                team[i].XPosition = posX;
-                team[i].YPosition = posY;
-                team[i].HomeX = posX;
-                team[i].HomeY = posY;
+                x = Clamp(x, pitchLeft, pitchRight);
+                y = Clamp(y, pitchTop, pitchBottom);
+
+                // Store them
+                team[i].XPosition = x;
+                team[i].YPosition = y;
+                team[i].HomeX = x;
+                team[i].HomeY = y;
             }
         }
 
-        // ----- Kickoff & Ball Assignment -----
-        private void WaitForKickoffEvent()
+        private int Clamp(int val, int min, int max)
         {
-            Console.Clear();
-            Console.SetCursorPosition(30, 15);
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine("Kickoff! Press any key to start.");
-            Console.ResetColor();
-            Console.ReadKey(true);
+            return Math.Max(min, Math.Min(val, max));
         }
-
+        // Select a kickoff player from the team's forwards or non-GK players.
         private Player SelectKickoffPlayer(List<Player> team)
         {
-            // Find a striker.
-            for (int i = 0; i < team.Count; i++)
-            {
-                if (team[i].Position.Contains("ST"))
-                    return team[i];
-            }
-            // Else, first non-goalkeeper.
-            for (int i = 0; i < team.Count; i++)
-            {
-                if (!team[i].IsGoalkeeper)
-                    return team[i];
-            }
-            return team.Count > 0 ? team[0] : null;
+            var strikers = team.Where(p => p.Name.Contains("ST")).ToList();
+            if (!strikers.Any())
+                strikers = team.Where(p => !p.IsGoalkeeper).ToList();
+            return strikers.Any() ? strikers[randomGenerator.Next(strikers.Count)] : team.FirstOrDefault();
         }
-
-        private void AssignBallToPlayer(Player newHolder)
+        // Assign the ball to a given player, removing it from all others.
+        private void AssignBallToPlayer(Player p)
         {
-            if (newHolder == null)
-            {
-                Console.WriteLine("[DEBUG] AssignBallToPlayer: newHolder is null.");
-                return;
-            }
-            // Clear ball flag for all players.
-            for (int i = 0; i < teamAPlayers.Count; i++)
-                teamAPlayers[i].HasBall = false;
-            for (int i = 0; i < teamBPlayers.Count; i++)
-                teamBPlayers[i].HasBall = false;
-            newHolder.HasBall = true;
-            newHolder.IsRunningWithBall = false;
-            if (IsPlayerInTeam(newHolder, teamAPlayers))
-                lastTeamToTouchBall = "TeamA";
-            else
-                lastTeamToTouchBall = "TeamB";
+            if (p == null) return;
+            foreach (var pl in teamAPlayers) pl.HasBall = false;
+            foreach (var pl in teamBPlayers) pl.HasBall = false;
+            p.HasBall = true;
         }
-
-        // ----- Main Simulation Loop -----
+        // Main match loop: runs until isRunning is false (time >= 90 or user exit).
+        // Updates dribbling, passing, shooting, etc.
         public void Start()
         {
-            int simulationTick = 0;
-            int center = (pitchLeft + pitchRight) / 2;
             while (isRunning)
             {
                 if (!isPaused)
                 {
-                    simulationTick++;
-                    currentMinute += (int)(gameSpeed / 100.0);
-                    if (currentMinute >= 90)
+                    // Advance simulation time
+                    simulationTime += timePerTick;
+                    currentMinute = (int)Math.Round(simulationTime);
+
+                    // End at 90 minutes
+                    if (simulationTime >= 90.0)
                     {
                         isRunning = false;
-                        continue;
+                        break;
                     }
 
-                    UpdateDribbling(center);
-                    UpdatePassing(simulationTick);
-                    UpdateShooting(center);
+                    UpdateDribbling();
+                    UpdatePassing();
+                    UpdateShooting();
                     CheckHalftime();
-                    UpdatePlayerMovements(center);
+                    UpdateNonBallPlayers();
                 }
+
                 HandleUserInput();
                 Draw(true);
+
+                // Sleep for a short time based on game speed
                 Thread.Sleep(isPaused ? 100 : (1000 / (gameSpeed > 0 ? gameSpeed : 1)));
             }
+
+            // After match, record result
+            clubA.RecordResult(teamAScore, teamBScore);
+            clubB.RecordResult(teamBScore, teamAScore);
             EndMatch();
         }
 
-        // ----- Helper Methods for Simulation -----
-        private void UpdateDribbling(int center)
+ 
+        // Basic dribbling logic: if a player has the ball and isn't GK,
+        // they move slightly toward or away from center, depending on half.
+        // GK stays in net.
+        private void UpdateDribbling()
         {
-            Player ballHolder = GetBallHolder();
+            int center = (pitchLeft + pitchRight) / 2;
+            Player ballHolder = teamAPlayers.Concat(teamBPlayers).FirstOrDefault(p => p.HasBall);
             if (ballHolder != null)
             {
                 if (ballHolder.Position.Contains("GK"))
                 {
-                    // Instead of forcing GK exactly to home, clamp them to a small goal box.
-                    if (IsPlayerInTeam(ballHolder, teamAPlayers))
-                    {
-                        int minX = pitchLeft;
-                        int maxX = pitchLeft + 2;
-                        int centerY = (pitchTop + pitchBottom) / 2;
-                        int minY = centerY - 2;
-                        int maxY = centerY + 2;
-                        ballHolder.XPosition = Clamp(ballHolder.XPosition, minX, maxX);
-                        ballHolder.YPosition = Clamp(ballHolder.YPosition, minY, maxY);
-                    }
-                    else if (IsPlayerInTeam(ballHolder, teamBPlayers))
-                    {
-                        int minX = pitchRight - 2;
-                        int maxX = pitchRight;
-                        int centerY = (pitchTop + pitchBottom) / 2;
-                        int minY = centerY - 2;
-                        int maxY = centerY + 2;
-                        ballHolder.XPosition = Clamp(ballHolder.XPosition, minX, maxX);
-                        ballHolder.YPosition = Clamp(ballHolder.YPosition, minY, maxY);
-                    }
+                    // GK pinned
+                    ballHolder.XPosition = ballHolder.HomeX;
+                    ballHolder.YPosition = ballHolder.HomeY;
                 }
                 else
                 {
-                    // For non-goalkeepers, move horizontally depending on possession.
-                    if (IsPlayerInTeam(ballHolder, teamAPlayers))
+                    if (teamAPlayers.Contains(ballHolder))
                     {
-                        int step = ballHolder.XPosition > center ? 3 : 2;
-                        if (isFirstHalf)
-                            ballHolder.XPosition = Math.Min(ballHolder.XPosition + step, pitchRight);
-                        else
-                            ballHolder.XPosition = Math.Max(ballHolder.XPosition - step, pitchLeft);
+                        int step = ballHolder.XPosition > center ? 2 : 1;
+                        ballHolder.XPosition = isFirstHalf
+                            ? Clamp(ballHolder.XPosition + step, pitchLeft, pitchRight)
+                            : Clamp(ballHolder.XPosition - step, pitchLeft, pitchRight);
                     }
-                    else if (IsPlayerInTeam(ballHolder, teamBPlayers))
+                    else
                     {
-                        int step = ballHolder.XPosition < center ? 3 : 2;
-                        if (isFirstHalf)
-                            ballHolder.XPosition = Math.Max(ballHolder.XPosition - step, pitchLeft);
-                        else
-                            ballHolder.XPosition = Math.Min(ballHolder.XPosition + step, pitchRight);
+                        int step = ballHolder.XPosition < center ? 2 : 1;
+                        ballHolder.XPosition = isFirstHalf
+                            ? Clamp(ballHolder.XPosition - step, pitchLeft, pitchRight)
+                            : Clamp(ballHolder.XPosition + step, pitchLeft, pitchRight);
                     }
                 }
             }
         }
-
-        private void UpdatePassing(int simulationTick)
+        // Trigger passing every 10 ticks. The ball holder may pass to a random teammate.
+        private void UpdatePassing()
         {
-            if (!ballInTransit && simulationTick % 5 == 0)
+            int tickCount = (int)(simulationTime / timePerTick);
+            if (!ballInTransit && tickCount % 10 == 0)
             {
-                Player ballHolder = GetBallHolder();
+                Player ballHolder = teamAPlayers.Concat(teamBPlayers).FirstOrDefault(p => p.HasBall);
                 if (ballHolder != null)
                 {
-                    List<Player> team = IsPlayerInTeam(ballHolder, teamAPlayers) ? teamAPlayers : teamBPlayers;
+                    var team = teamAPlayers.Contains(ballHolder) ? teamAPlayers : teamBPlayers;
                     if (team.Count > 1)
                     {
-                        // Choose a receiver simply.
-                        int index = randomGenerator.Next(team.Count);
-                        Player receiver = team[index];
-                        if (receiver == ballHolder)
-                            receiver = team[(index + 1) % team.Count];
-
+                        var potentialReceivers = team.Where(p => p != ballHolder).ToList();
+                        Player receiver = potentialReceivers[randomGenerator.Next(potentialReceivers.Count)];
                         bool stolen;
-                        Animation.AnimatePass(ballHolder.XPosition, ballHolder.YPosition,
+                        Animation.AnimatePass(
+                            ballHolder.XPosition, ballHolder.YPosition,
                             receiver.XPosition, receiver.YPosition,
                             gameSpeed, randomGenerator, out stolen);
                         if (!stolen)
@@ -307,202 +276,211 @@ namespace GUI
                 }
             }
         }
-
-        private void UpdateShooting(int center)
+        // Trigger shooting every 20 ticks. The ball holder may attempt a shot if in 'opponent's half'.
+        private void UpdateShooting()
         {
-            if (!ballInTransit && currentMinute % 10 == 0)
+            int tickCount = (int)(simulationTime / timePerTick);
+            if (!ballInTransit && tickCount % 20 == 0)
             {
-                Player ballHolder = GetBallHolder();
+                Player ballHolder = teamAPlayers.Concat(teamBPlayers).FirstOrDefault(p => p.HasBall);
                 if (ballHolder != null && !ballHolder.Position.Contains("GK"))
                 {
-                    if (IsPlayerInTeam(ballHolder, teamAPlayers))
+                    int center = (pitchLeft + pitchRight) / 2;
+
+                    if (teamAPlayers.Contains(ballHolder))
                     {
-                        bool inOppHalf = ballHolder.XPosition > center;
+                        bool inOppHalf = (ballHolder.XPosition > center);
                         double shotChance = inOppHalf ? 0.5 : 0.3;
                         if (randomGenerator.NextDouble() < shotChance)
                         {
-                            Player defendingGK = GetGoalkeeper(teamBPlayers);
+                            Player gk = teamBPlayers.FirstOrDefault(p => p.Position.Contains("GK"));
                             double saveChance = 0.4;
-                            if (defendingGK != null && randomGenerator.NextDouble() < saveChance)
+                            if (gk != null && randomGenerator.NextDouble() < saveChance)
                             {
-                                Console.WriteLine(defendingGK.Name + " saves the shot!");
-                                AssignBallToPlayer(defendingGK);
+                                Console.WriteLine($"{gk.Name} saves the shot!");
+                                AssignBallToPlayer(gk);
                             }
                             else
                             {
-                                Animation.AnimateShot(ballHolder.XPosition, ballHolder.YPosition,
-                                    pitchRight, (pitchTop + pitchBottom) / 2 + randomGenerator.Next(-2, 3),
+                                Animation.AnimateShot(
+                                    ballHolder.XPosition, ballHolder.YPosition,
+                                    pitchRight,
+                                    Clamp((pitchTop + pitchBottom)/2 + randomGenerator.Next(-2, 3),
+                                          pitchTop, pitchBottom),
                                     gameSpeed);
                                 teamAScore++;
+
                                 WaitForKickoffEvent();
                                 Player kp = SelectKickoffPlayer(teamBPlayers);
-                                if (kp != null)
-                                    AssignBallToPlayer(kp);
+                                if (kp != null) AssignBallToPlayer(kp);
                             }
                         }
                     }
-                    else if (IsPlayerInTeam(ballHolder, teamBPlayers))
+                    else
                     {
-                        bool inOppHalf = ballHolder.XPosition < center;
+                        bool inOppHalf = (ballHolder.XPosition < center);
                         double shotChance = inOppHalf ? 0.5 : 0.3;
                         if (randomGenerator.NextDouble() < shotChance)
                         {
-                            Player defendingGK = GetGoalkeeper(teamAPlayers);
+                            Player gk = teamAPlayers.FirstOrDefault(p => p.Position.Contains("GK"));
                             double saveChance = 0.4;
-                            if (defendingGK != null && randomGenerator.NextDouble() < saveChance)
+                            if (gk != null && randomGenerator.NextDouble() < saveChance)
                             {
-                                Console.WriteLine(defendingGK.Name + " saves the shot!");
-                                AssignBallToPlayer(defendingGK);
+                                Console.WriteLine($"{gk.Name} saves the shot!");
+                                AssignBallToPlayer(gk);
                             }
                             else
                             {
-                                Animation.AnimateShot(ballHolder.XPosition, ballHolder.YPosition,
-                                    pitchLeft, (pitchTop + pitchBottom) / 2 + randomGenerator.Next(-2, 3),
+                                Animation.AnimateShot(
+                                    ballHolder.XPosition, ballHolder.YPosition,
+                                    pitchLeft,
+                                    Clamp((pitchTop + pitchBottom)/2 + randomGenerator.Next(-2, 3),
+                                          pitchTop, pitchBottom),
                                     gameSpeed);
                                 teamBScore++;
+
                                 WaitForKickoffEvent();
                                 Player kp = SelectKickoffPlayer(teamAPlayers);
-                                if (kp != null)
-                                    AssignBallToPlayer(kp);
+                                if (kp != null) AssignBallToPlayer(kp);
                             }
                         }
                     }
                 }
             }
         }
-
+        // Check if we've reached halftime (45'), and if so, switch sides for kickoff.
         private void CheckHalftime()
         {
-            if (isFirstHalf && currentMinute >= 45)
+            if (isFirstHalf && simulationTime >= 45.0)
             {
                 isFirstHalf = false;
                 WaitForKickoffEvent();
                 if (firstHalfStartingTeamA)
                 {
                     Player kp = SelectKickoffPlayer(teamBPlayers);
-                    if (kp != null)
-                        AssignBallToPlayer(kp);
+                    if (kp != null) AssignBallToPlayer(kp);
                 }
                 else
                 {
                     Player kp = SelectKickoffPlayer(teamAPlayers);
-                    if (kp != null)
-                        AssignBallToPlayer(kp);
+                    if (kp != null) AssignBallToPlayer(kp);
                 }
             }
         }
-
-        private void UpdatePlayerMovements(int center)
+        // Moves all non-ball holders back to their home or a forward position
+        // using BFS to avoid collisions.
+        private void UpdateNonBallPlayers()
         {
-            // For simplicity, move non-ball-holders one step toward their home positions.
-            UpdateTeamMovement(teamAPlayers, true, center, 10, true);
-            UpdateTeamMovement(teamBPlayers, true, center, 10, false);
-        }
+            bool teamAInPossession = teamAPlayers.Any(p => p.HasBall);
+            bool teamBInPossession = teamBPlayers.Any(p => p.HasBall);
+            int center = (pitchLeft + pitchRight) / 2;
+            int attackOffset = 10;
 
-        private void UpdateTeamMovement(List<Player> team, bool inPossession, int center, int offset, bool isTeamA)
-        {
-            for (int i = 0; i < team.Count; i++)
+            // Build occupancy grid
+            bool[,] occupied = new bool[pitchBottom - pitchTop + 1, pitchRight - pitchLeft + 1];
+            foreach (var pl in teamAPlayers.Concat(teamBPlayers))
             {
-                Player p = team[i];
-                if (p.HasBall || p.Position.Contains("GK"))
-                    continue;
-                int targetX = p.HomeX;
-                if (inPossession)
+                int gx = pl.XPosition - pitchLeft;
+                int gy = pl.YPosition - pitchTop;
+                if (gx >= 0 && gx < occupied.GetLength(1) &&
+                    gy >= 0 && gy < occupied.GetLength(0))
                 {
-                    if (isTeamA)
-                    {
-                        int desired = p.HomeX + offset;
-                        desired = isFirstHalf ? Math.Min(desired, center - 1) : Math.Max(desired, center + 1);
-                        if (p.XPosition < desired)
-                            targetX = desired;
-                    }
-                    else
-                    {
-                        int desired = p.HomeX - offset;
-                        desired = isFirstHalf ? Math.Max(desired, center + 1) : Math.Min(desired, center - 1);
-                        if (p.XPosition > desired)
-                            targetX = desired;
-                    }
+                    occupied[gy, gx] = true;
                 }
-                else
+            }
+
+            // Team A updates
+            foreach (var p in teamAPlayers)
+            {
+                if (p.HasBall) continue;
+                if (p.Position.Contains("GK"))
                 {
-                    targetX = p.HomeX;
+                    // GK pinned
+                    p.XPosition = p.HomeX;
+                    p.YPosition = p.HomeY;
+                    continue;
+                }
+                int targetX = p.HomeX;
+                if (teamAInPossession)
+                {
+                    // Move forward if in possession
+                    int desired = p.HomeX + attackOffset;
+                    desired = isFirstHalf ? Math.Min(desired, center - 1)
+                                          : Math.Max(desired, center + 1);
+                    targetX = (p.XPosition < desired) ? desired : p.XPosition;
+
+                    // If near the ball, move slightly further
+                    Player ballHolder = teamAPlayers.FirstOrDefault(pl => pl.HasBall);
+                    if (ballHolder != null)
+                    {
+                        double dist = Distance(p.XPosition, p.YPosition, ballHolder.XPosition, ballHolder.YPosition);
+                        if (dist < 5)
+                            targetX = isFirstHalf ? Math.Min(targetX + 5, center - 1)
+                                                  : Math.Max(targetX - 5, center + 1);
+                    }
                 }
                 int targetY = p.HomeY;
-                if (p.XPosition < targetX)
-                    p.XPosition++;
-                else if (p.XPosition > targetX)
-                    p.XPosition--;
-                if (p.YPosition < targetY)
-                    p.YPosition++;
-                else if (p.YPosition > targetY)
-                    p.YPosition--;
+                // BFS next step
+                var next = TeamUpdaterFixed.CalculateNextStepBFS(p, targetX, targetY, occupied, pitchLeft, pitchTop);
+                p.XPosition = Clamp(next.Item1, pitchLeft, pitchRight);
+                p.YPosition = Clamp(next.Item2, pitchTop, pitchBottom);
             }
-        }
 
-        // ----- Utility Methods -----
-        private int Clamp(int value, int min, int max)
-        {
-            if (value < min) return min;
-            if (value > max) return max;
-            return value;
-        }
-
-        private Player GetBallHolder()
-        {
-            foreach (Player p in teamAPlayers)
+            // Team B updates
+            foreach (var p in teamBPlayers)
             {
-                if (p.HasBall)
-                    return p;
-            }
-            foreach (Player p in teamBPlayers)
-            {
-                if (p.HasBall)
-                    return p;
-            }
-            return null;
-        }
-
-        private bool IsPlayerInTeam(Player player, List<Player> team)
-        {
-            foreach (Player p in team)
-            {
-                if (p == player)
-                    return true;
-            }
-            return false;
-        }
-
-        private bool HasBall(List<Player> team)
-        {
-            foreach (Player p in team)
-            {
-                if (p.HasBall)
-                    return true;
-            }
-            return false;
-        }
-
-        private Player GetGoalkeeper(List<Player> team)
-        {
-            foreach (Player p in team)
-            {
+                if (p.HasBall) continue;
                 if (p.Position.Contains("GK"))
-                    return p;
-            }
-            return null;
-        }
+                {
+                    // GK pinned
+                    p.XPosition = p.HomeX;
+                    p.YPosition = p.HomeY;
+                    continue;
+                }
+                int targetX = p.HomeX;
+                if (teamBInPossession)
+                {
+                    // Move forward if in possession (for B, forward is decreasing X if isFirstHalf, etc.)
+                    int desired = p.HomeX - attackOffset;
+                    desired = isFirstHalf ? Math.Max(desired, center + 1)
+                                          : Math.Min(desired, center - 1);
+                    targetX = (p.XPosition > desired) ? desired : p.XPosition;
 
+                    // If near the ball, move further
+                    Player ballHolder = teamBPlayers.FirstOrDefault(pl => pl.HasBall);
+                    if (ballHolder != null)
+                    {
+                        double dist = Distance(p.XPosition, p.YPosition, ballHolder.XPosition, ballHolder.YPosition);
+                        if (dist < 5)
+                            targetX = isFirstHalf ? Math.Max(targetX - 5, center + 1)
+                                                  : Math.Min(targetX + 5, center - 1);
+                    }
+                }
+                int targetY = p.HomeY;
+                var next = TeamUpdaterFixed.CalculateNextStepBFS(p, targetX, targetY, occupied, pitchLeft, pitchTop);
+                p.XPosition = Clamp(next.Item1, pitchLeft, pitchRight);
+                p.YPosition = Clamp(next.Item2, pitchTop, pitchBottom);
+            }
+        }
+        // Distance helper for BFS logic and tackle checks.
+        private double Distance(int x1, int y1, int x2, int y2)
+        {
+            double dx = x2 - x1;
+            double dy = y2 - y1;
+            return Math.Sqrt(dx * dx + dy * dy);
+        }
+        // Handles user input for pausing or other global keys.
         private void HandleUserInput()
         {
             if (Console.KeyAvailable)
             {
-                ConsoleKeyInfo key = Console.ReadKey(true);
+                var key = Console.ReadKey(true);
                 if (key.Key == ConsoleKey.Spacebar)
                     isPaused = !isPaused;
             }
         }
-
+        // Called when the match ends (time >= 90).
+        // Prints final score.
         private void EndMatch()
         {
             Console.Clear();
@@ -514,23 +492,37 @@ namespace GUI
             Console.SetCursorPosition(0, 0);
         }
 
-        // ----- UI Drawing -----
+        // Draw method: uses a console buffer to draw the pitch and players,
+        // then renders to the console.
         public override void Draw(bool active)
         {
+            // Create a buffer matching the console size
             ConsoleCell[,] buffer = new ConsoleCell[Drawing.ConsoleHeight, Drawing.ConsoleWidth];
+            // Clear it
             Drawing.ClearBuffer(buffer);
+            // Draw pitch background
             Drawing.DrawPitch(buffer, pitchLeft, pitchTop, pitchRight, pitchBottom);
-            foreach (Player p in teamAPlayers)
+
+            // Draw Team A players
+            foreach (var p in teamAPlayers)
             {
-                ConsoleColor col = p.HasBall ? ConsoleColor.Magenta : ConsoleColor.Blue;
-                Drawing.DrawPlayer(buffer, p.XPosition, p.YPosition, 'P', col, col);
+                // If the player has the ball, color them magenta
+                ConsoleColor color = p.HasBall ? ConsoleColor.Magenta : ConsoleColor.Blue;
+                Drawing.DrawPlayer(buffer, p.XPosition, p.YPosition, 'P', color, color);
             }
-            foreach (Player p in teamBPlayers)
+            // Draw Team B players
+            foreach (var p in teamBPlayers)
             {
-                ConsoleColor col = p.HasBall ? ConsoleColor.Magenta : ConsoleColor.Red;
-                Drawing.DrawPlayer(buffer, p.XPosition, p.YPosition, 'P', col, col);
+                ConsoleColor color = p.HasBall ? ConsoleColor.Magenta : ConsoleColor.Red;
+                Drawing.DrawPlayer(buffer, p.XPosition, p.YPosition, 'P', color, color);
             }
-            Drawing.PlaceString(buffer, 2, 1, $"Time: {currentMinute}'   Score: {teamAScore}-{teamBScore}   Tactic: {currentTactic}", ConsoleColor.Yellow, ConsoleColor.Black);
+
+            // Place scoreboard text
+            Drawing.PlaceString(buffer, 2, 1,
+                $"Time: {currentMinute}'   Score: {teamAScore}-{teamBScore}",
+                ConsoleColor.Yellow, ConsoleColor.Black);
+
+            // Render buffer
             Drawing.RenderBufferToConsole(buffer);
         }
     }

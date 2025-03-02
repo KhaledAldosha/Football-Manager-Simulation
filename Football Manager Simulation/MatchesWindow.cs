@@ -4,15 +4,18 @@ using System.Drawing;
 
 namespace GUI
 {
+    // The MatchesWindow provides the user interface for playing matches.
+    // It shows upcoming fixtures and handles playing the match simulation.
     public class MatchesWindow : Window
     {
-        private League _league;
-        private Club _userTeam;
-        private List<Fixture> _fixtures;
-        private int _currentFixtureIndex;
-        private int _matchCounter;
+        private League _league;           // Reference to league data
+        private Club _userTeam;           // The user's club
+        private List<Fixture> _fixtures;  // List of fixtures for the user team
+        private int _currentFixtureIndex; // Index of the next fixture to be played
+        private int _matchCounter;        // How many matches have been played
         private Random _rnd = new Random();
 
+        // Constructor sets up the matches window with the league, user's team, and window properties.
         public MatchesWindow(League league, Club userTeam, string title, Rectangle rectangle, bool visible)
             : base(title, rectangle, visible)
         {
@@ -22,14 +25,15 @@ namespace GUI
             _currentFixtureIndex = 0;
             _matchCounter = 0;
         }
-
+        // Generates fixtures for the user's team by pairing it with other clubs.
+        // If odd number of clubs, adds a dummy club to allow pairing.
         private void GenerateFixtures()
         {
             List<Club> clubs = new List<Club>(_league.Clubs);
             bool hasDummy = false;
             if (clubs.Count % 2 != 0)
             {
-                clubs.Add(new Club("Club", 0));
+                clubs.Add(new Club("Dummy", 0));
                 hasDummy = true;
             }
             int n = clubs.Count;
@@ -45,7 +49,7 @@ namespace GUI
                     int awayIndex = n - 1 - match;
                     Club home = rotation[homeIndex];
                     Club away = rotation[awayIndex];
-                    if (home.Name != "Club" && away.Name != "Club")
+                    if (home.Name != "Dummy" && away.Name != "Dummy")
                     {
                         singleRound.Add(new Fixture(home, away));
                     }
@@ -61,11 +65,13 @@ namespace GUI
                 fullFixtures.Add(new Fixture(f.AwayTeam, f.HomeTeam));
             }
             if (hasDummy)
-                clubs.RemoveAll(c => c.Name == "Club");
+                clubs.RemoveAll(c => c.Name == "Dummy");
+            // Filter fixtures to those involving the user's team.
             _fixtures = fullFixtures.FindAll(f => f.HomeTeam == _userTeam || f.AwayTeam == _userTeam);
             _currentFixtureIndex = 0;
         }
-
+        // Update processes key input: if 'P' is pressed, plays the next match.
+        // Also handles ESC to return to main menu.
         public override void Update()
         {
             var key = UserInterface.Input.Key;
@@ -79,7 +85,7 @@ namespace GUI
                 PlayMatch();
             }
         }
-
+        // Draws the matches window UI, including next fixture info and match count.
         public override void Draw(bool active)
         {
             Console.Clear();
@@ -103,6 +109,8 @@ namespace GUI
             Console.WriteLine("Press ESC to return to the main menu.");
         }
 
+        // Plays the next fixture for the user's team.
+        // Starts the live match simulation and then updates league state.
         private void PlayMatch()
         {
             if (_currentFixtureIndex >= _fixtures.Count)
@@ -121,14 +129,14 @@ namespace GUI
             Console.WriteLine("Press any key to start live match simulation...");
             Console.ReadKey(true);
 
-            // Determine the opponent relative to the user’s team.
+            // Determine the opponent relative to the user's team.
             Club opponent = (fixture.HomeTeam == _userTeam) ? fixture.AwayTeam : fixture.HomeTeam;
             new Match(_userTeam, opponent).Start();
 
-            // Auto-simulate the remaining matches for the match day.
+            // Optionally simulate other matches for the match day.
             _league.SimulateRemainingMatchesForMatchDay();
 
-            // ** AI attempts to buy after every match. **
+            // AI clubs try to buy players after a match.
             _league.AIBuyPlayers();
 
             _matchCounter++;
@@ -138,14 +146,11 @@ namespace GUI
             if (_matchCounter % 5 == 0)
             {
                 _league.AISellPlayers();
-            }
-
-            if (_matchCounter % 5 == 0)
-            {
                 RefreshTransferMarket();
             }
         }
 
+        // Refreshes the transfer market with new players.
         private void RefreshTransferMarket()
         {
             Console.Clear();
@@ -158,6 +163,7 @@ namespace GUI
         }
     }
 
+    // Represents a single fixture between two clubs.
     public class Fixture
     {
         public Club HomeTeam { get; }

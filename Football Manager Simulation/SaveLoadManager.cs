@@ -5,24 +5,29 @@ using System.Linq;
 
 namespace GUI
 {
+    // Handles saving and loading of the game state to/from a file.
+    // This includes clubs, players, match counter, etc.
     public static class SaveLoadManager
     {
-        // SaveGame writes the match counter, the user's club, and then each club's data.
+        // Writes out the match counter, user club name, and then each club's data
+        // (plus players) to a text file.
         public static void SaveGame(int matchCounter, League league, string filePath = "savegame.txt")
         {
             try
             {
                 using (StreamWriter writer = new StreamWriter(filePath))
                 {
-                    // Save match counter.
+                    // First line: match counter
                     writer.WriteLine(matchCounter);
-                    // Save the user's club name.
-                    writer.WriteLine("UserClub|" + (league.UserClub != null ? league.UserClub.Name : ""));
 
-                    // For each club.
+                    // Second line: user club name
+                    string userClubName = (league.UserClub != null) ? league.UserClub.Name : "";
+                    writer.WriteLine("UserClub|" + userClubName);
+
+                    // Then for each club, we write a line with the club data
                     foreach (Club club in league.Clubs)
                     {
-                        // Prepare starting eleven from PositionAssignments (sorted by key).
+                        // Prepare the 'startingEleven' string from PositionAssignments
                         string startingEleven = "";
                         if (club.PositionAssignments != null && club.PositionAssignments.Count > 0)
                         {
@@ -30,11 +35,12 @@ namespace GUI
                             startingEleven = string.Join(",", sortedAssignments.Select(kv => kv.Value.Name));
                         }
 
-                        // Format: Club|Name|Balance|Wins|Draws|Losses|GoalsFor|GoalsAgainst|Points|StartingEleven
+                        // Club line format:
+                        // Club|Name|Balance|Wins|Draws|Losses|GoalsFor|GoalsAgainst|Points|StartingEleven
                         string clubLine = $"Club|{club.Name}|{club.Balance}|{club.Wins}|{club.Draws}|{club.Losses}|{club.GoalsFor}|{club.GoalsAgainst}|{club.Points}|{startingEleven}";
                         writer.WriteLine(clubLine);
 
-                        // Write each player's data.
+                        // Then for each player in that club, we write a Player line
                         // Format: Player|Name|Value|Rating|Age|Position|Potential|Wage|ContractLength|SquadStatus|TransferPrice|AvailableForTransfer
                         foreach (Player p in club.Players)
                         {
@@ -44,7 +50,6 @@ namespace GUI
                     }
                 }
                 Console.WriteLine("Game saved successfully.");
-                // Display the full path so you know where the file is saved.
                 Console.WriteLine("Save file location: " + Path.GetFullPath(filePath));
             }
             catch (Exception ex)
@@ -53,7 +58,8 @@ namespace GUI
             }
         }
 
-        // LoadGame restores the match counter, the user club, and each club's data.
+        // Reads the match counter, user club name, then each club and its players
+        // from a text file. Returns the match counter as an int.
         public static int LoadGame(League league, string filePath)
         {
             int matchCounter = 0;
@@ -61,12 +67,12 @@ namespace GUI
             {
                 using (StreamReader reader = new StreamReader(filePath))
                 {
-                    // Read match counter.
+                    // First line => match counter
                     string line = reader.ReadLine();
                     if (int.TryParse(line, out int counter))
                         matchCounter = counter;
 
-                    // Read the user club line.
+                    // Second line => user club name
                     string userClubLine = reader.ReadLine();
                     string userClubName = "";
                     if (!string.IsNullOrEmpty(userClubLine) && userClubLine.StartsWith("UserClub|"))
@@ -76,26 +82,27 @@ namespace GUI
                             userClubName = tokens[1];
                     }
 
-                    // Create a dictionary for quick club lookup.
+                    // Build a dictionary for quick club lookup
                     Dictionary<string, Club> clubDict = league.Clubs.ToDictionary(c => c.Name, c => c);
 
-                    // Read rest of the file.
+                    // Now read each subsequent line
                     while ((line = reader.ReadLine()) != null)
                     {
+                        // If it's a club line
                         if (line.StartsWith("Club|"))
                         {
-                            // Club header format:
-                            // Club|Name|Balance|Wins|Draws|Losses|GoalsFor|GoalsAgainst|Points|StartingEleven
+                            // Format: Club|Name|Balance|Wins|Draws|Losses|GoalsFor|GoalsAgainst|Points|StartingEleven
                             string[] parts = line.Split('|');
                             if (parts.Length < 9)
                                 continue;
 
                             string clubName = parts[1];
                             if (!clubDict.ContainsKey(clubName))
-                                continue;
+                                continue; // If the club isn't in the league
 
                             Club club = clubDict[clubName];
 
+                            // Parse each piece of data
                             if (double.TryParse(parts[2], out double balance))
                                 club.Balance = balance;
                             if (int.TryParse(parts[3], out int wins))
@@ -111,12 +118,14 @@ namespace GUI
                             if (int.TryParse(parts[8], out int points))
                                 club.Points = points;
 
+                            // Possibly read the 'startingEleven' string
                             string startingEleven = parts.Length >= 10 ? parts[9] : "";
-                            // Clear current players and assignments.
+                            // Clear existing players and assignments
                             club.Players.Clear();
                             club.PositionAssignments = new Dictionary<int, Player>();
 
-                            // Read following Player lines for this club.
+                            // After reading this 'Club|' line, we read subsequent 'Player|' lines
+                            // until we reach a new 'Club|' or end of file
                             while ((line = reader.ReadLine()) != null && line.StartsWith("Player|"))
                             {
                                 string[] pParts = line.Split('|');
@@ -135,19 +144,31 @@ namespace GUI
                                 double pTransferPrice = double.TryParse(pParts[10], out double tp) ? tp : 0;
                                 bool pAvailableForTransfer = bool.TryParse(pParts[11], out bool avail) ? avail : false;
 
-                                // (Statistics are not saved in this example.)
+                                // We skip statistics in this example
                                 Dictionary<string, int> stats = new Dictionary<string, int>();
 
-                                Player player = new Player(pName, pValue, pRating, pAge, pPosition, pPotential, pWage, pContractLength, pSquadStatus, stats)
+                                // Create a new Player object
+                                Player player = new Player(
+                                    pName,
+                                    pValue,
+                                    pRating,
+                                    pAge,
+                                    pPosition,
+                                    pPotential,
+                                    pWage,
+                                    pContractLength,
+                                    pSquadStatus,
+                                    stats)
                                 {
                                     TransferPrice = pTransferPrice,
                                     AvailableForTransfer = pAvailableForTransfer
                                 };
 
+                                // Add to the club
                                 club.AddPlayer(player);
                             }
 
-                            // Reassign starting eleven based on saved names.
+                            // Reconstruct startingEleven if present
                             if (!string.IsNullOrWhiteSpace(startingEleven))
                             {
                                 string[] startNames = startingEleven.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
@@ -162,10 +183,13 @@ namespace GUI
                                     index++;
                                 }
                             }
+
+                            // If 'line' isn't a 'Player|' line anymore, it might be the next 'Club|' or null
+                            // We continue the loop from there
                         }
                     }
 
-                    // After loading all clubs, set the user's club if saved.
+                    // After reading all clubs, set userClub if we have a match
                     if (!string.IsNullOrEmpty(userClubName) && clubDict.ContainsKey(userClubName))
                     {
                         league.UserClub = clubDict[userClubName];

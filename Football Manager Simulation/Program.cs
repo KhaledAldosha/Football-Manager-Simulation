@@ -4,17 +4,23 @@ using System.Threading;
 
 namespace GUI
 {
+    // The Program class is the entry point for the Football Manager Simulation.
+    // It sets up the console properties, handles starting a new game or loading a game,
+    // and then starts the main user interface loop.
     public class Program
     {
         public static void Main(string[] args)
         {
+            // Set the console title.
             Console.Title = "Football Manager Simulation";
+
+            // Attempt to set window and buffer size.
             try
             {
                 Console.SetWindowSize(150, 40);
                 Console.SetBufferSize(150, 40);
             }
-            catch { }
+            catch { /* Ignore errors if size cannot be set */ }
 
             Console.Clear();
             Console.WriteLine("Welcome to Football Manager Simulation!");
@@ -23,13 +29,14 @@ namespace GUI
 
             League league = new League();
             int matchCounter = 0;
+
             if (choice == 'L')
             {
                 Console.Clear();
                 Console.WriteLine("Enter the full path of your save file:");
                 string filePath = Console.ReadLine();
                 matchCounter = SaveLoadManager.LoadGame(league, filePath);
-                // If the save file contained a user club, resume the game normally.
+                // If the save file did not specify a user club, let the user choose one.
                 if (league.UserClub == null)
                 {
                     Console.WriteLine("Save file did not contain a user club. Please choose your club:");
@@ -43,21 +50,23 @@ namespace GUI
                 Console.ReadKey(true);
             }
 
+            // Determine the user's club index.
             int userClubIndex = league.Clubs.IndexOf(league.UserClub);
+            // Initialize the user interface with the league and the manager's club index.
             UserInterface ui = new UserInterface(league, userClubIndex);
 
-            // Main loop—no clearing per frame.
+            // Main game loop
             while (!ui.Closing)
             {
                 ui.Update();
                 ui.Draw();
-                Thread.Sleep(50); // Adjust delay as needed for smooth performance.
+                Thread.Sleep(50); // Adjust delay for smoother performance if needed.
             }
             Console.Clear();
             Console.WriteLine("Exiting game... Goodbye!");
         }
-
-        // This method is only used if the save file doesn't include a user club.
+        // Helper method to choose a club if not provided by a save file.
+        // Prompts the user to select a club from the list.
         private static Club ChooseClub(League league)
         {
             Console.Clear();

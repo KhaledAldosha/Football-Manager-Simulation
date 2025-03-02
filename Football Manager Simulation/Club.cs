@@ -3,16 +3,17 @@ using System.Collections.Generic;
 
 namespace GUI
 {
+    // Represents a football club with a name, balance, players, and league stats.
     public class Club
     {
-        public string Name { get; }
-        public double Balance { get; set; }
-        public List<Player> Players { get; }
-        public double TotalTransfersIn { get; set; }
-        public double TotalTransfersOut { get; set; }
-        public string SelectedTactic { get; set; }
+        public string Name { get; }              // Club name
+        public double Balance { get; set; }      // Financial balance
+        public List<Player> Players { get; }     // The squad (list of players)
+        public double TotalTransfersIn { get; set; }   // Money spent
+        public double TotalTransfersOut { get; set; }  // Money earned from sales
+        public string SelectedTactic { get; set; }      // Current tactic name
 
-        // League table properties:
+        // League table properties
         public int Wins { get; set; }
         public int Draws { get; set; }
         public int Losses { get; set; }
@@ -20,10 +21,11 @@ namespace GUI
         public int GoalsAgainst { get; set; }
         public int Points { get; set; }
 
-        // New properties needed by other parts of your application:
+        // Formation/tactical properties
         public Formation? SelectedFormation { get; set; }
         public Dictionary<int, Player>? PositionAssignments { get; set; }
-
+        // Constructor for a new club, initializes an empty players list
+        // and default stats.
         public Club(string name, double balance)
         {
             Name = name;
@@ -31,7 +33,7 @@ namespace GUI
             Players = new List<Player>();
             TotalTransfersIn = 0;
             TotalTransfersOut = 0;
-            SelectedTactic = "Tikitaka"; // default tactic
+            SelectedTactic = "Tikitaka"; // default
             Wins = 0;
             Draws = 0;
             Losses = 0;
@@ -41,19 +43,19 @@ namespace GUI
             SelectedFormation = null;
             PositionAssignments = new Dictionary<int, Player>();
         }
-
+        // Adds a player to this club's squad, sets player's CurrentClub to this club.
         public void AddPlayer(Player player)
         {
-            // If needed, remove from another club before adding.
             player.CurrentClub = this;
             Players.Add(player);
         }
 
-        /// Records a match result by updating goals for/against and wins/draws/losses/points.
+        // Records a match result: updates goals for/against and W/D/L/Points.
         public void RecordResult(int goalsFor, int goalsAgainst)
         {
             GoalsFor += goalsFor;
             GoalsAgainst += goalsAgainst;
+
             if (goalsFor > goalsAgainst)
             {
                 Wins++;
@@ -69,13 +71,14 @@ namespace GUI
                 Losses++;
             }
         }
-
+        // Returns a string for displaying in the league table,
+        // e.g. the club name padded to 20 chars.
         public virtual string GetLeagueInfoString()
         {
-            // For display in the league table.
             return Name.PadRight(20, ' ');
         }
 
+        // ToString returns the club's name.
         public override string ToString() => Name;
     }
 }

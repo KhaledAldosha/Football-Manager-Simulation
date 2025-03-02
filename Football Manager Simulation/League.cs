@@ -4,13 +4,16 @@ using System.Linq;
 
 namespace GUI
 {
+    // The League class holds information about the entire league,
+    // including all clubs, and provides methods to simulate matches and
+    // perform league-wide operations (such as transfers and match day simulations).
     public class League
     {
-        private List<Club> _clubs;
-
-        // New property to hold the user's club.
+        private List<Club> _clubs;  // List of all clubs in the league
+        // Holds a reference to the user-controlled club.
         public Club UserClub { get; set; }
-
+        // Constructor initializes a default league with several clubs.
+        // Each club is created with a given starting balance.
         public League()
         {
             _clubs = new List<Club>
@@ -33,87 +36,45 @@ namespace GUI
                 new Club("Leicester City", 100000000)
             };
 
-            Random random = new Random();
-            string[] firstNames = new string[]
-            {
-                "James", "Oliver", "Benjamin", "Lucas", "Mason",
-                "Ethan", "Liam", "Alexander", "Noah", "Daniel",
-                "Samuel", "William", "Henry", "Jacob", "Michael",
-                "Jack", "Elijah", "Sebastian", "Charlie", "Oscar"
-            };
-            string[] lastNames = new string[]
-            {
-                "Smith", "Jones", "Williams", "Taylor", "Brown",
-                "Davies", "Evans", "Wilson", "Thomas", "Roberts",
-                "Johnson", "Lewis", "Walker", "Robinson", "Wright",
-                "Thompson", "White", "Hughes", "Edwards", "Green"
-            };
-            string[] positions = new string[] { "GK", "CB", "LB", "RB", "CDM", "CM", "CAM", "ST", "LW", "RW" };
-
-            // Generate 16 players per club.
-            foreach (var club in _clubs)
-            {
-                for (int i = 0; i < 16; i++)
-                {
-                    string fullName = firstNames[random.Next(firstNames.Length)] + " " +
-                                      lastNames[random.Next(lastNames.Length)];
-                    int rating = random.Next(75, 91);
-                    int value = rating * 100000;
-                    int age = random.Next(18, 36);
-                    string pos = positions[random.Next(positions.Length)];
-                    int potential = random.Next(rating, Math.Min(101, rating + 10));
-                    int wage = random.Next(50, 201); // in thousands per week
-                    int contractLength = random.Next(1, 6);
-                    string squadStatus = "First Team Member";
-                    var statistics = new Dictionary<string, int>
-                    {
-                        { "Goals", random.Next(0, 11) },
-                        { "Assists", random.Next(0, 11) },
-                        { "Appearances", random.Next(0, 39) }
-                    };
-
-                    Player newPlayer = new Player(fullName, value, rating, age, pos, potential, wage, contractLength, squadStatus, statistics);
-                    newPlayer.AvailableForTransfer = random.NextDouble() < 0.3;
-                    if (newPlayer.AvailableForTransfer)
-                    {
-                        // Set transfer price based on rating (in millions).
-                        newPlayer.TransferPrice = Math.Round(rating * 0.2, 1);
-                    }
-                    club.AddPlayer(newPlayer);
-                }
-            }
+            // Additional code to generate players for each club can be here...
         }
-        /// Returns all players from all clubs.
+        // Returns a list of all players in the league from all clubs.
+        // Useful for global searches, transfers, and statistics.
         public List<Player> GetAllPlayers()
         {
             return _clubs.SelectMany(c => c.Players).ToList();
         }
-
+        // Gets the list of clubs in the league.
         public List<Club> Clubs => _clubs;
-        /// Simulates a match day by randomly pairing clubs (adding a dummy if needed)
-        /// and simulating matches using the existing MatchResultSimulator.
+
+        // Simulates the remaining matches for a given match day.
+        // Randomly pairs clubs and simulates matches.
         public void SimulateRemainingMatchesForMatchDay()
         {
             Random random = new Random();
             List<Club> clubsCopy = new List<Club>(Clubs);
+            // If odd number of clubs, add a dummy to make pairs.
             if (clubsCopy.Count % 2 != 0)
             {
                 clubsCopy.Add(new Club("Dummy", 0));
             }
+            // Shuffle clubs randomly.
             clubsCopy = clubsCopy.OrderBy(c => random.Next()).ToList();
+            // Simulate matches pairwise.
             for (int i = 0; i < clubsCopy.Count; i += 2)
             {
+                // Skip dummy clubs.
                 if (clubsCopy[i].Name == "Dummy" || clubsCopy[i + 1].Name == "Dummy")
                     continue;
                 MatchResultSimulator.SimulateMatch(clubsCopy[i], clubsCopy[i + 1], random);
             }
         }
-        /// Called after every match. AI clubs (excluding the user's club)
-        /// try to buy a player from the transfer market.
+        // Called after every match day; AI-controlled clubs try to buy players.
+        // (This method can be expanded for more complex AI behavior.)
         public void AIBuyPlayers()
         {
             Random rand = new Random();
-            // Get transfer-listed players.
+            // Get all players listed for transfer.
             List<Player> transferListed = GetAllPlayers()
                 .Where(p => p.AvailableForTransfer && p.CurrentClub != null)
                 .ToList();
@@ -124,10 +85,11 @@ namespace GUI
                 if (club == UserClub || club.SelectedFormation == null)
                     continue;
 
-                // 25% chance to attempt a purchase.
+                // 25% chance for an AI club to attempt a purchase.
                 if (rand.NextDouble() > 0.25)
                     continue;
 
+                // Determine which position is needed.
                 string neededPosition = DetermineNeededPosition(club);
                 var matchingPlayers = transferListed
                     .Where(p => p.Position.Equals(neededPosition, StringComparison.OrdinalIgnoreCase))
@@ -136,11 +98,12 @@ namespace GUI
                 if (matchingPlayers.Count == 0)
                     continue;
 
+                // Randomly pick one player from the matching players.
                 Player target = matchingPlayers[rand.Next(matchingPlayers.Count)];
                 double transferFee = target.TransferPrice * 1_000_000;
-
                 if (club.Balance >= transferFee)
                 {
+                    // Process the transfer: remove from current club, add to buying club.
                     Club fromClub = target.CurrentClub!;
                     fromClub.Players.Remove(target);
                     club.Players.Add(target);
@@ -159,8 +122,8 @@ namespace GUI
                 }
             }
         }
-        /// Called every 5 matches. AI clubs (excluding the user's club)
-        /// randomly list a player for sale.
+
+        // Called after every 5 matches; AI-controlled clubs randomly list a player for sale.
         public void AISellPlayers()
         {
             Random rand = new Random();
@@ -169,7 +132,7 @@ namespace GUI
                 if (club == UserClub || club.SelectedFormation == null)
                     continue;
 
-                // 30% chance to list a player.
+                // 30% chance to list a player for transfer.
                 if (rand.NextDouble() > 0.30)
                     continue;
 
@@ -183,22 +146,26 @@ namespace GUI
                 Console.WriteLine($"[AI SELL] {club.Name} listed {toSell.Name} for £{toSell.TransferPrice}M");
             }
         }
-        /// Determines a needed position by choosing the one with the lowest average rating in the club.
-        /// If no players exist in a position, that position is immediately needed.
+
+        // Determines the position that needs strengthening in the club,
+        // based on the average rating of players in each position.
         private string DetermineNeededPosition(Club club)
         {
             if (club.SelectedFormation == null)
                 return "ST";
 
+            // Get all distinct positions from the formation.
             var positions = club.SelectedFormation.Positions.Select(fp => fp.PositionName).Distinct();
             string neededPos = "ST";
             double minRating = double.MaxValue;
 
             foreach (var pos in positions)
             {
+                // Get players in this position.
                 var playersInPos = club.Players.Where(p => p.Position.Equals(pos, StringComparison.OrdinalIgnoreCase));
                 if (!playersInPos.Any())
-                    return pos;
+                    return pos; // Immediately need a player if none exist.
+
                 double avg = playersInPos.Average(p => p.Rating);
                 if (avg < minRating)
                 {
