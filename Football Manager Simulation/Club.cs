@@ -23,7 +23,7 @@ namespace GUI
 
         // Formation/tactical properties
         public Formation? SelectedFormation { get; set; }
-        public Dictionary<int, Player>? PositionAssignments { get; set; }
+        public Dictionary<int, Player>? PositionAssignments { get; set; } 
         // Constructor for a new club, initializes an empty players list
         // and default stats.
         public Club(string name, double balance)
